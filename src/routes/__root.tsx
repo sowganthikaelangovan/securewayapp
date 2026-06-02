@@ -114,6 +114,10 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  useEffect(() => {
+    // Initialize Supabase auth + realtime listeners once.
+    import("@/lib/secureway-store").then((m) => m.bootstrapSecureway());
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
