@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Shield, ChevronRight, ArrowLeft } from "lucide-react";
-import { login } from "@/lib/secureway-store";
+import { Shield, ChevronRight, ArrowLeft, Server } from "lucide-react";
+import { sendOtp, verifyOtp } from "@/lib/secureway-store";
+import { getApiUrl, setApiUrl } from "@/lib/secureway-api";
 
 export const Route = createFileRoute("/app/login")({
   head: () => ({ meta: [{ title: "Sign in · SecureWay" }] }),
@@ -12,11 +13,14 @@ function LoginPage() {
   const [step, setStep] = useState<"phone" | "otp" | "splash">("splash");
   const [phone, setPhone] = useState("+91 99999 99999");
   const [otp, setOtp] = useState("");
+  const [apiUrl, setApiUrlState] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const t = setTimeout(() => setStep("phone"), 1400);
+    setApiUrlState(getApiUrl());
+    const t = setTimeout(() => setStep("phone"), 1200);
     return () => clearTimeout(t);
   }, []);
 
@@ -55,13 +59,41 @@ function LoginPage() {
 
         {step === "phone" && (
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               setError("");
-              setStep("otp");
+              if (!apiUrl.trim()) {
+                setError("Set your backend URL first.");
+                return;
+              }
+              setApiUrl(apiUrl);
+              setLoading(true);
+              try {
+                await sendOtp(phone);
+                setStep("otp");
+              } catch (err: any) {
+                setError(err?.message ?? "Failed to reach backend.");
+              } finally {
+                setLoading(false);
+              }
             }}
             className="mt-8 space-y-4"
           >
+            <label className="block">
+              <span className="text-sm font-medium inline-flex items-center gap-1.5">
+                <Server className="size-3.5" /> Backend URL
+              </span>
+              <input
+                value={apiUrl}
+                onChange={(e) => setApiUrlState(e.target.value)}
+                className="mt-2 w-full rounded-2xl border border-input bg-card px-4 py-3 text-sm font-mono outline-none focus:ring-2 focus:ring-ring"
+                placeholder="https://your-backend.example.com"
+              />
+              <span className="text-xs text-muted-foreground mt-1 block">
+                Your Express + SQLite server. Saved on this device.
+              </span>
+            </label>
+
             <label className="block">
               <span className="text-sm font-medium">Phone number</span>
               <input
@@ -71,26 +103,30 @@ function LoginPage() {
                 placeholder="+91 99999 99999"
               />
             </label>
-            <button className="w-full rounded-full bg-gradient-emergency text-primary-foreground py-3.5 font-semibold shadow-sos inline-flex items-center justify-center gap-2">
-              Send OTP <ChevronRight className="size-4" />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <button
+              disabled={loading}
+              className="w-full rounded-full bg-gradient-emergency text-primary-foreground py-3.5 font-semibold shadow-sos inline-flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {loading ? "Sending..." : <>Send OTP <ChevronRight className="size-4" /></>}
             </button>
-            <div className="rounded-2xl bg-muted/60 border border-border p-4 text-sm">
-              <p className="font-medium">Demo credentials</p>
-              <p className="text-muted-foreground mt-1">Phone: +91 99999 99999 · OTP: 123456</p>
-            </div>
           </form>
         )}
 
         {step === "otp" && (
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              if (otp.trim() !== "123456") {
-                setError("Invalid OTP. Use 123456 for the demo.");
-                return;
+              setError("");
+              setLoading(true);
+              try {
+                await verifyOtp(phone, otp.trim());
+                navigate({ to: "/app" });
+              } catch (err: any) {
+                setError(err?.message ?? "Verification failed.");
+              } finally {
+                setLoading(false);
               }
-              login(phone);
-              navigate({ to: "/app" });
             }}
             className="mt-8 space-y-4"
           >
@@ -106,8 +142,11 @@ function LoginPage() {
               />
             </label>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <button className="w-full rounded-full bg-gradient-emergency text-primary-foreground py-3.5 font-semibold shadow-sos">
-              Verify & continue
+            <button
+              disabled={loading || otp.length < 4}
+              className="w-full rounded-full bg-gradient-emergency text-primary-foreground py-3.5 font-semibold shadow-sos disabled:opacity-60"
+            >
+              {loading ? "Verifying..." : "Verify & continue"}
             </button>
             <button
               type="button"
