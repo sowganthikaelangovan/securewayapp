@@ -32,7 +32,7 @@ function ContactsPage() {
             <a href={`tel:${c.phone.replace(/\s/g, "")}`} className="size-10 rounded-full bg-safe text-safe-foreground grid place-items-center">
               <PhoneCall className="size-4" />
             </a>
-            <button onClick={() => removeContact(c.id)} className="size-10 rounded-full bg-muted text-muted-foreground grid place-items-center hover:bg-emergency/10 hover:text-emergency">
+            <button onClick={() => { void removeContact(c.id); }} className="size-10 rounded-full bg-muted text-muted-foreground grid place-items-center hover:bg-emergency/10 hover:text-emergency">
               <Trash2 className="size-4" />
             </button>
           </div>
@@ -62,11 +62,15 @@ function AddContactModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 bg-foreground/60 backdrop-blur-sm grid place-items-end sm:place-items-center p-0 sm:p-5">
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
           if (!name.trim() || !phone.trim()) return;
-          addContact({ name, phone, relation });
-          onClose();
+          try {
+            await addContact({ name, phone, relation });
+            onClose();
+          } catch (err) {
+            console.error("Add contact failed", err);
+          }
         }}
         className="w-full max-w-md bg-card rounded-t-3xl sm:rounded-3xl p-6 shadow-card animate-in slide-in-from-bottom-10 duration-200"
       >

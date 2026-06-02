@@ -1,5 +1,10 @@
-// Tiny localStorage-backed demo store for SecureWay
-export type Contact = { id: string; name: string; phone: string; relation: string };
+// Client-side cache for SecureWay state. Mutations call the backend
+// (see secureway-api.ts) and then refresh the cache. Screens consume the
+// cache via useSecureway().
+import { useEffect, useState } from "react";
+import { api, getToken, setToken, type ApiContact, type ApiAlert, type ApiUser } from "./secureway-api";
+
+export type Contact = ApiContact;
 export type SosAlert = { id: string; lat: number; lng: number; msg: string; time: string };
 export type User = {
   phone: string;
@@ -9,36 +14,36 @@ export type User = {
   lng: number;
 };
 
-const KEY = "secureway:state:v1";
+const CACHE_KEY = "secureway:cache:v2";
 
-type State = {
-  user: User | null;
-  contacts: Contact[];
-  alerts: SosAlert[];
-};
-
-const seed = (phone: string): State => ({
-  user: {
-    phone,
-    name: "Sarah Johnson",
-    status: "safe",
-    lat: 12.9716,
-    lng: 77.5946,
-  },
-  contacts: [
-    { id: "1", name: "Mom", phone: "+91 98765 43210", relation: "Family" },
-    { id: "2", name: "Best Friend", phone: "+91 91234 56789", relation: "Friend" },
-    { id: "3", name: "Brother", phone: "+91 87654 32109", relation: "Family" },
-  ],
-  alerts: [],
-});
-
+type State = { user: User | null; contacts: Contact[]; alerts: SosAlert[] };
 const empty: State = { user: null, contacts: [], alerts: [] };
+
+function normalizeUser(u: ApiUser | null | undefined): User | null {
+  if (!u) return null;
+  return {
+    phone: u.phone,
+    name: u.name ?? "User",
+    status: (u.status as "safe" | "alert") ?? "safe",
+    lat: u.lat ?? 12.9716,
+    lng: u.lng ?? 77.5946,
+  };
+}
+
+function normalizeAlert(a: ApiAlert): SosAlert {
+  return {
+    id: a.id,
+    lat: a.lat,
+    lng: a.lng,
+    msg: a.msg ?? "Emergency SOS triggered",
+    time: a.time ?? a.created_at ?? new Date().toISOString(),
+  };
+}
 
 export function loadState(): State {
   if (typeof window === "undefined") return empty;
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return empty;
     return JSON.parse(raw);
   } catch {
@@ -46,53 +51,75 @@ export function loadState(): State {
   }
 }
 
-export function saveState(s: State) {
+function saveState(s: State) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(KEY, JSON.stringify(s));
+  localStorage.setItem(CACHE_KEY, JSON.stringify(s));
   window.dispatchEvent(new Event("secureway:update"));
 }
 
-export function login(phone: string) {
-  const next = seed(phone);
+function patch(updater: (s: State) => State) {
+  saveState(updater(loadState()));
+}
+
+export async function refresh(): Promise<State> {
+  if (!getToken()) {
+    saveState(empty);
+    return empty;
+  }
+  const [meRes, contactsRes, historyRes] = await Promise.all([
+    api.me().catch(() => null),
+    api.listContacts().catch(() => ({ contacts: [] })),
+    api.sosHistory().catch(() => ({ alerts: [] })),
+  ]);
+  const next: State = {
+    user: normalizeUser(meRes?.user ?? null),
+    contacts: contactsRes.contacts ?? [],
+    alerts: (historyRes.alerts ?? []).map(normalizeAlert),
+  };
   saveState(next);
+  return next;
+}
+
+export async function sendOtp(phone: string) {
+  await api.sendOtp(phone);
+}
+
+export async function verifyOtp(phone: string, otp: string) {
+  const { token, user } = await api.verifyOtp(phone, otp);
+  setToken(token);
+  saveState({ user: normalizeUser(user) ?? null, contacts: [], alerts: [] });
+  await refresh();
 }
 
 export function logout() {
+  setToken(null);
   saveState(empty);
 }
 
-export function addContact(c: Omit<Contact, "id">) {
-  const s = loadState();
-  s.contacts.push({ ...c, id: crypto.randomUUID() });
-  saveState(s);
+export async function addContact(c: Omit<Contact, "id">) {
+  const { contact } = await api.addContact(c);
+  patch((s) => ({ ...s, contacts: [...s.contacts, contact] }));
 }
 
-export function removeContact(id: string) {
-  const s = loadState();
-  s.contacts = s.contacts.filter((c) => c.id !== id);
-  saveState(s);
+export async function removeContact(id: string) {
+  await api.removeContact(id);
+  patch((s) => ({ ...s, contacts: s.contacts.filter((c) => c.id !== id) }));
 }
 
-export function recordSos(lat: number, lng: number) {
-  const s = loadState();
-  s.alerts.unshift({
-    id: crypto.randomUUID(),
-    lat,
-    lng,
-    msg: "Emergency SOS triggered",
-    time: new Date().toISOString(),
-  });
-  if (s.user) s.user.status = "alert";
-  saveState(s);
+export async function recordSos(lat: number, lng: number) {
+  const { alert } = await api.triggerSos(lat, lng);
+  patch((s) => ({
+    ...s,
+    user: s.user ? { ...s.user, status: "alert" } : s.user,
+    alerts: [normalizeAlert(alert), ...s.alerts],
+  }));
 }
 
-export function clearAlert() {
-  const s = loadState();
-  if (s.user) s.user.status = "safe";
-  saveState(s);
+export async function clearAlert() {
+  try { await api.clearSos(); } catch { /* non-fatal */ }
+  patch((s) => ({ ...s, user: s.user ? { ...s.user, status: "safe" } : s.user }));
 }
 
-import { useEffect, useState } from "react";
 export function useSecureway() {
   const [state, setState] = useState<State>(empty);
   useEffect(() => {

@@ -13,9 +13,13 @@ function AppHome() {
   const { user, contacts } = useSecureway();
   const [sosOpen, setSosOpen] = useState(false);
 
-  const triggerSos = () => {
-    recordSos(user?.lat ?? 12.9716, user?.lng ?? 77.5946);
+  const triggerSos = async () => {
     setSosOpen(true);
+    try {
+      await recordSos(user?.lat ?? 12.9716, user?.lng ?? 77.5946);
+    } catch (err) {
+      console.error("SOS failed", err);
+    }
   };
 
   return (

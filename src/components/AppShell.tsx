@@ -1,7 +1,8 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Home, Users, MapPin, Route as RouteIcon, User as UserIcon, LogOut } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { useSecureway, logout } from "@/lib/secureway-store";
+import { logout, refresh } from "@/lib/secureway-store";
+import { getToken } from "@/lib/secureway-api";
 
 const tabs = [
   { to: "/app", label: "Home", icon: Home, exact: true },
@@ -12,19 +13,17 @@ const tabs = [
 ];
 
 export function AppShell({ children, title }: { children: ReactNode; title?: string }) {
-  const state = useSecureway();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    if (!state.user && typeof window !== "undefined") {
-      // hydration-safe: only redirect after first paint if no user
-      const t = setTimeout(() => {
-        if (!loadCheck()) navigate({ to: "/app/login" });
-      }, 50);
-      return () => clearTimeout(t);
+    if (typeof window === "undefined") return;
+    if (!getToken()) {
+      navigate({ to: "/app/login" });
+      return;
     }
-  }, [state.user, navigate]);
+    refresh().catch(() => { /* keep cached state if offline */ });
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -70,14 +69,4 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
       </nav>
     </div>
   );
-}
-
-function loadCheck() {
-  try {
-    const raw = localStorage.getItem("secureway:state:v1");
-    if (!raw) return false;
-    return !!JSON.parse(raw).user;
-  } catch {
-    return false;
-  }
 }
