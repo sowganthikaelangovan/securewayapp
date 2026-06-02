@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Shield, ChevronRight, ArrowLeft, Server } from "lucide-react";
+import { Shield, ChevronRight, ArrowLeft } from "lucide-react";
 import { sendOtp, verifyOtp } from "@/lib/secureway-store";
-import { getApiUrl, setApiUrl } from "@/lib/secureway-api";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/app/login")({
   head: () => ({ meta: [{ title: "Sign in · SecureWay" }] }),
@@ -11,18 +11,21 @@ export const Route = createFileRoute("/app/login")({
 
 function LoginPage() {
   const [step, setStep] = useState<"phone" | "otp" | "splash">("splash");
-  const [phone, setPhone] = useState("+91 99999 99999");
+  const [phone, setPhone] = useState("+91");
   const [otp, setOtp] = useState("");
-  const [apiUrl, setApiUrlState] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    setApiUrlState(getApiUrl());
-    const t = setTimeout(() => setStep("phone"), 1200);
-    return () => clearTimeout(t);
-  }, []);
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        navigate({ to: "/app" });
+        return;
+      }
+      setTimeout(() => setStep("phone"), 900);
+    });
+  }, [navigate]);
 
   if (step === "splash") {
     return (
@@ -50,10 +53,10 @@ function LoginPage() {
         <div className="size-14 rounded-2xl bg-gradient-emergency grid place-items-center text-primary-foreground shadow-sos">
           <Shield className="size-7" />
         </div>
-        <h1 className="mt-6 text-3xl font-semibold">{step === "phone" ? "Welcome back" : "Verify your number"}</h1>
+        <h1 className="mt-6 text-3xl font-semibold">{step === "phone" ? "Welcome" : "Verify your number"}</h1>
         <p className="mt-2 text-muted-foreground">
           {step === "phone"
-            ? "Sign in with your phone number to access your safety circle."
+            ? "Sign in with your phone number. We'll text you a verification code."
             : `We sent a 6-digit code to ${phone}.`}
         </p>
 
@@ -62,17 +65,23 @@ function LoginPage() {
             onSubmit={async (e) => {
               e.preventDefault();
               setError("");
-              if (!apiUrl.trim()) {
-                setError("Set your backend URL first.");
+              const normalized = phone.replace(/\s+/g, "");
+              if (!/^\+\d{8,15}$/.test(normalized)) {
+                setError("Use international format, e.g. +14155551234");
                 return;
               }
-              setApiUrl(apiUrl);
               setLoading(true);
               try {
-                await sendOtp(phone);
+                await sendOtp(normalized);
+                setPhone(normalized);
                 setStep("otp");
               } catch (err: any) {
-                setError(err?.message ?? "Failed to reach backend.");
+                const msg = err?.message ?? "Failed to send OTP.";
+                setError(
+                  /provider|sms|twilio|disabled/i.test(msg)
+                    ? "SMS provider isn't configured yet. Set up Twilio in Cloud → Users → Auth Settings → Phone."
+                    : msg
+                );
               } finally {
                 setLoading(false);
               }
@@ -80,28 +89,17 @@ function LoginPage() {
             className="mt-8 space-y-4"
           >
             <label className="block">
-              <span className="text-sm font-medium inline-flex items-center gap-1.5">
-                <Server className="size-3.5" /> Backend URL
-              </span>
-              <input
-                value={apiUrl}
-                onChange={(e) => setApiUrlState(e.target.value)}
-                className="mt-2 w-full rounded-2xl border border-input bg-card px-4 py-3 text-sm font-mono outline-none focus:ring-2 focus:ring-ring"
-                placeholder="https://your-backend.example.com"
-              />
-              <span className="text-xs text-muted-foreground mt-1 block">
-                Your Express + SQLite server. Saved on this device.
-              </span>
-            </label>
-
-            <label className="block">
               <span className="text-sm font-medium">Phone number</span>
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                inputMode="tel"
                 className="mt-2 w-full rounded-2xl border border-input bg-card px-4 py-3.5 text-base outline-none focus:ring-2 focus:ring-ring"
-                placeholder="+91 99999 99999"
+                placeholder="+14155551234"
               />
+              <span className="text-xs text-muted-foreground mt-1 block">
+                Include country code (e.g. +91 for India, +1 for US).
+              </span>
             </label>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <button
@@ -143,7 +141,7 @@ function LoginPage() {
             </label>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <button
-              disabled={loading || otp.length < 4}
+              disabled={loading || otp.length < 6}
               className="w-full rounded-full bg-gradient-emergency text-primary-foreground py-3.5 font-semibold shadow-sos disabled:opacity-60"
             >
               {loading ? "Verifying..." : "Verify & continue"}

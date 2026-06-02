@@ -1,8 +1,8 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Home, Users, MapPin, Route as RouteIcon, User as UserIcon, LogOut } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { logout, refresh } from "@/lib/secureway-store";
-import { getToken } from "@/lib/secureway-api";
+import { logout } from "@/lib/secureway-store";
+import { supabase } from "@/integrations/supabase/client";
 
 const tabs = [
   { to: "/app", label: "Home", icon: Home, exact: true },
@@ -17,12 +17,17 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
   const location = useLocation();
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!getToken()) {
-      navigate({ to: "/app/login" });
-      return;
-    }
-    refresh().catch(() => { /* keep cached state if offline */ });
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled && !data.session) navigate({ to: "/app/login" });
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (!session) navigate({ to: "/app/login" });
+    });
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, [navigate]);
 
   return (
@@ -34,7 +39,7 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
             <h1 className="text-xl font-semibold">{title ?? "Home"}</h1>
           </div>
           <button
-            onClick={() => { logout(); navigate({ to: "/app/login" }); }}
+            onClick={async () => { await logout(); navigate({ to: "/app/login" }); }}
             className="p-2 rounded-full hover:bg-muted text-muted-foreground"
             aria-label="Sign out"
           >
