@@ -70,13 +70,3 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
     </div>
   );
 }
-
-function loadCheck() {
-  try {
-    const raw = localStorage.getItem("secureway:state:v1");
-    if (!raw) return false;
-    return !!JSON.parse(raw).user;
-  } catch {
-    return false;
-  }
-}
