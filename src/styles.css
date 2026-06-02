@@ -111,6 +111,8 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
   h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
 }

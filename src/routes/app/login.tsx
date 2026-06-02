@@ -11,7 +11,7 @@ export const Route = createFileRoute("/app/login")({
 
 function LoginPage() {
   const [step, setStep] = useState<"phone" | "otp" | "splash">("splash");
-  const [phone, setPhone] = useState("+91");
+  const [phone, setPhone] = useState("+91 ");
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -98,7 +98,8 @@ function LoginPage() {
                 placeholder="+14155551234"
               />
               <span className="text-xs text-muted-foreground mt-1 block">
-                Include country code (e.g. +91 for India, +1 for US).
+                Include country code (e.g. +91 for India).<br/>
+                <b>Demo:</b> <button type="button" className="underline text-primary" onClick={() => setPhone("+91 99999 99999")}>+91 99999 99999</button> (OTP: 123456)
               </span>
             </label>
             {error && <p className="text-sm text-destructive">{error}</p>}

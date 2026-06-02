@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Home, Users, MapPin, Route as RouteIcon, User as UserIcon, LogOut } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { logout } from "@/lib/secureway-store";
+import { logout, useSecureway } from "@/lib/secureway-store";
 import { supabase } from "@/integrations/supabase/client";
 
 const tabs = [
@@ -16,7 +16,10 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
   const navigate = useNavigate();
   const location = useLocation();
 
+  const { user } = useSecureway();
+
   useEffect(() => {
+    if (user?.id === "demo-user") return;
     let cancelled = false;
     supabase.auth.getSession().then(({ data }) => {
       if (!cancelled && !data.session) navigate({ to: "/app/login" });
@@ -28,7 +31,7 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
       cancelled = true;
       sub.subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, user?.id]);
 
   return (
     <div className="min-h-screen bg-background pb-24">

@@ -27,6 +27,7 @@ function setState(updater: (s: State) => State) {
 
 // ---------- Auth ----------
 export async function sendOtp(phone: string) {
+  if (phone === "+919999999999") return; // Demo bypass
   const { error } = await supabase.auth.signInWithOtp({
     phone,
     options: { channel: "sms" },
@@ -35,6 +36,23 @@ export async function sendOtp(phone: string) {
 }
 
 export async function verifyOtp(phone: string, token: string) {
+  if (phone === "+919999999999" && token === "123456") {
+    setState((s) => ({
+      ...s,
+      user: {
+        id: "demo-user",
+        phone: "+91 99999 99999",
+        name: "Demo User",
+        status: "safe",
+        lat: 12.9716,
+        lng: 77.5946,
+      },
+      contacts: [],
+      alerts: [],
+      loading: false,
+    }));
+    return;
+  }
   const { error } = await supabase.auth.verifyOtp({ phone, token, type: "sms" });
   if (error) throw error;
   await refresh();
@@ -47,6 +65,7 @@ export async function logout() {
 
 // ---------- Data ----------
 export async function refresh(): Promise<void> {
+  if (current.user?.id === "demo-user") return;
   const { data: sessionData } = await supabase.auth.getSession();
   const session = sessionData.session;
   if (!session) {
@@ -87,6 +106,10 @@ export async function refresh(): Promise<void> {
 }
 
 export async function addContact(c: Omit<Contact, "id">) {
+  if (current.user?.id === "demo-user") {
+    setState((s) => ({ ...s, contacts: [...s.contacts, { ...c, id: "demo-contact-" + Date.now() }] as Contact[] }));
+    return;
+  }
   const { data: sessionData } = await supabase.auth.getSession();
   const uid = sessionData.session?.user.id;
   if (!uid) throw new Error("Not signed in");
@@ -100,12 +123,27 @@ export async function addContact(c: Omit<Contact, "id">) {
 }
 
 export async function removeContact(id: string) {
+  if (current.user?.id === "demo-user") {
+    setState((s) => ({ ...s, contacts: s.contacts.filter((c) => c.id !== id) }));
+    return;
+  }
   const { error } = await supabase.from("contacts").delete().eq("id", id);
   if (error) throw error;
   setState((s) => ({ ...s, contacts: s.contacts.filter((c) => c.id !== id) }));
 }
 
 export async function recordSos(lat: number, lng: number) {
+  if (current.user?.id === "demo-user") {
+    setState((s) => ({
+      ...s,
+      user: s.user ? { ...s.user, status: "alert", lat, lng } : s.user,
+      alerts: [
+        { id: "demo-alert-" + Date.now(), lat, lng, msg: "Emergency SOS triggered", time: new Date().toISOString() },
+        ...s.alerts,
+      ],
+    }));
+    return;
+  }
   const { data: sessionData } = await supabase.auth.getSession();
   const uid = sessionData.session?.user.id;
   if (!uid) throw new Error("Not signed in");
@@ -127,6 +165,10 @@ export async function recordSos(lat: number, lng: number) {
 }
 
 export async function clearAlert() {
+  if (current.user?.id === "demo-user") {
+    setState((s) => ({ ...s, user: s.user ? { ...s.user, status: "safe" } : s.user }));
+    return;
+  }
   const { data: sessionData } = await supabase.auth.getSession();
   const uid = sessionData.session?.user.id;
   if (!uid) return;
@@ -140,6 +182,10 @@ export async function clearAlert() {
 }
 
 export async function updateMyLocation(lat: number, lng: number) {
+  if (current.user?.id === "demo-user") {
+    setState((s) => ({ ...s, user: s.user ? { ...s.user, lat, lng } : s.user }));
+    return;
+  }
   const { data: sessionData } = await supabase.auth.getSession();
   const uid = sessionData.session?.user.id;
   if (!uid) return;
@@ -148,6 +194,10 @@ export async function updateMyLocation(lat: number, lng: number) {
 }
 
 export async function updateMyName(name: string) {
+  if (current.user?.id === "demo-user") {
+    setState((s) => ({ ...s, user: s.user ? { ...s.user, name } : s.user }));
+    return;
+  }
   const { data: sessionData } = await supabase.auth.getSession();
   const uid = sessionData.session?.user.id;
   if (!uid) return;
@@ -174,6 +224,7 @@ export function bootstrapSecureway() {
   wired = true;
 
   supabase.auth.onAuthStateChange((_event, session) => {
+    if (current.user?.id === "demo-user") return;
     if (!session) {
       setState(() => empty);
     } else {
