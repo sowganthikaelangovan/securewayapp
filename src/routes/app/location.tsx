@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MapPin, Share2, Navigation, Wifi } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { useSecureway } from "@/lib/secureway-store";
+import { useSecureway, updateMyLocation } from "@/lib/secureway-store";
 
 export const Route = createFileRoute("/app/location")({
   head: () => ({ meta: [{ title: "Location · SecureWay" }] }),
@@ -12,6 +12,29 @@ export const Route = createFileRoute("/app/location")({
 function LocationPage() {
   const { user } = useSecureway();
   const [sharing, setSharing] = useState(false);
+  const watchId = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!sharing) {
+      if (watchId.current != null && typeof navigator !== "undefined") {
+        navigator.geolocation.clearWatch(watchId.current);
+        watchId.current = null;
+      }
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    watchId.current = navigator.geolocation.watchPosition(
+      (pos) => { void updateMyLocation(pos.coords.latitude, pos.coords.longitude); },
+      () => { /* permission denied or unavailable */ },
+      { enableHighAccuracy: true, maximumAge: 10000 },
+    );
+    return () => {
+      if (watchId.current != null) {
+        navigator.geolocation.clearWatch(watchId.current);
+        watchId.current = null;
+      }
+    };
+  }, [sharing]);
 
   return (
     <AppShell title="Your location">
