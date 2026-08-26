@@ -1,0 +1,10 @@
+{
+	"appId": "com.secureway.app",
+	"appName": "SecureWay",
+	"webDir": "dist/client",
+	"server": {
+		"url": "http://localhost:8080",
+		"cleartext": true
+	},
+	"packageClassList": []
+}
