@@ -3,10 +3,26 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 function createSupabaseClient() {
-  // Use import.meta.env for client-side (Vite build-time replacement)
-  // Fall back to process.env for SSR (server-side rendering)
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+  const getEnvVar = (viteKey: string, generalKey: string): string | undefined => {
+    if (typeof process !== 'undefined' && process.env) {
+      if (process.env[viteKey]) return process.env[viteKey];
+      if (process.env[generalKey]) return process.env[generalKey];
+      if (process.env[`EXPO_PUBLIC_${generalKey}`]) return process.env[`EXPO_PUBLIC_${generalKey}`];
+    }
+    try {
+      // @ts-ignore
+      if (typeof import.meta !== 'undefined' && import.meta?.env) {
+        // @ts-ignore
+        return import.meta.env[viteKey] || import.meta.env[generalKey];
+      }
+    } catch {
+      // import.meta is not supported in Hermes / React Native
+    }
+    return undefined;
+  };
+
+  const SUPABASE_URL = getEnvVar('VITE_SUPABASE_URL', 'SUPABASE_URL');
+  const SUPABASE_PUBLISHABLE_KEY = getEnvVar('VITE_SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_PUBLISHABLE_KEY');
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [
@@ -20,7 +36,7 @@ function createSupabaseClient() {
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: {
-      storage: typeof window !== 'undefined' ? localStorage : undefined,
+      storage: typeof window !== 'undefined' && typeof window.localStorage !== 'undefined' ? window.localStorage : undefined,
       persistSession: true,
       autoRefreshToken: true,
     }

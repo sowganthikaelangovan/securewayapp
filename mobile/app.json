@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "SecureWay",
+    "slug": "secureway-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#090d16"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.secureway.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "SecureWay requires location access to send emergency SOS alerts with your precise coordinates.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SecureWay shares live location updates with your emergency contacts during active alerts."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#090d16"
+      },
+      "package": "com.secureway.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CALL_PHONE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
