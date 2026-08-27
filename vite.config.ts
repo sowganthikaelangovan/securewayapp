@@ -7,6 +7,15 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  vite: {
+    resolve: {
+      alias: {
+        "react-native": "react-native-web",
+        "@react-native/assets-registry/registry": "react-native-web/dist/cjs/modules/AssetRegistry/index.js",
+        "@react-native/assets-registry": "react-native-web/dist/cjs/modules/AssetRegistry/index.js",
+      },
+    },
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

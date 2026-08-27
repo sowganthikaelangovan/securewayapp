@@ -34,7 +34,19 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
+          <string>com.googleusercontent.apps.182883918097-u736b15ls1nuulqd7gm1d8b4f2ebeu1p</string>
+        </array>
+      </dict>
+      <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
           <string>exp+secureway-app</string>
+        </array>
+      </dict>
+      <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>app-1-182883918097-ios-756bea2a5366e4e98decb0</string>
         </array>
       </dict>
     </array>
@@ -51,10 +63,18 @@
       <key>NSAllowsLocalNetworking</key>
       <true/>
     </dict>
+    <key>NSContactsUsageDescription</key>
+    <string>SecureWay requires access to your phone contacts so you can easily select and add trusted emergency contacts.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>SecureWay shares live location updates with your emergency contacts during active alerts.</string>
+    <string>SecureWay continuously shares live location updates with your emergency contacts while using the app and in the background.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>SecureWay tracks your live location in the background to ensure your safety shield remains active even when the app is closed.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>SecureWay requires location access to send emergency SOS alerts with your precise coordinates.</string>
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>location</string>
+    </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

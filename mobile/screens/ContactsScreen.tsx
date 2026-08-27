@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   StyleSheet,
   Alert,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSecureway, addContact, removeContact, Contact } from "@/lib/secureway-store";
@@ -21,6 +22,7 @@ export function ContactsScreen() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [relation, setRelation] = useState("Parent");
+  const [loading, setLoading] = useState(false);
 
   const handleAdd = async () => {
     if (!name.trim() || !phone.trim()) {
@@ -46,6 +48,48 @@ export function ContactsScreen() {
     }
   };
 
+  // Import directly from Device Phonebook Contacts
+  const handleImportFromPhonebook = async () => {
+    setLoading(true);
+    try {
+      if (Platform.OS === "web") {
+        Alert.alert("Phone Contacts", "Please type contact details manually on web browser.");
+        setModalVisible(true);
+        return;
+      }
+
+      const ExpoContacts = await import("expo-contacts");
+      const { status } = await ExpoContacts.requestPermissionsAsync();
+
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Contact access is needed to pick emergency contacts directly from your phone address book."
+        );
+        return;
+      }
+
+      const contact = await ExpoContacts.presentContactPickerAsync();
+      if (contact) {
+        const contactName = contact.name || [contact.firstName, contact.lastName].filter(Boolean).join(" ");
+        const rawPhone = contact.phoneNumbers && contact.phoneNumbers.length > 0 ? contact.phoneNumbers[0].number : "";
+
+        if (contactName && rawPhone) {
+          await addContact({ name: contactName, phone: rawPhone, relation: "Family" });
+          Alert.alert("Contact Added", `${contactName} (${rawPhone}) added to your emergency circle!`);
+        } else {
+          Alert.alert("No Phone Number", "The selected contact does not have a valid phone number.");
+        }
+      }
+    } catch (err: any) {
+      console.warn("Contact picker note:", err);
+      // Fallback to manual entry modal if contact picker is dismissed
+      setModalVisible(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <AppHeader title="Emergency Contacts" subtitle="Your trusted emergency circle" />
@@ -54,14 +98,15 @@ export function ContactsScreen() {
         <View style={styles.infoBanner}>
           <Ionicons name="people" size={20} color="#8b5cf6" />
           <Text style={styles.infoText}>
-            Contacts listed here will automatically receive SMS & location alerts when SOS is pressed.
+            Contacts listed here will automatically receive live SMS & location tracking alerts when SOS is pressed.
           </Text>
         </View>
 
         {contacts.length === 0 ? (
           <View style={styles.emptyState}>
+            <Ionicons name="person-add-outline" size={48} color="#475569" style={{ marginBottom: 12 }} />
             <Text style={styles.emptyTitle}>No Emergency Contacts</Text>
-            <Text style={styles.emptySub}>Add your family or friends to stay protected.</Text>
+            <Text style={styles.emptySub}>Add your family or friends from phonebook to stay protected.</Text>
           </View>
         ) : (
           contacts.map((contact: Contact) => (
@@ -70,21 +115,33 @@ export function ContactsScreen() {
         )}
       </ScrollView>
 
-      <TouchableOpacity
-        style={styles.fab}
-        activeOpacity={0.85}
-        onPress={() => setModalVisible(true)}
-      >
-        <Ionicons name="person-add" size={20} color="#ffffff" />
-        <Text style={styles.fabText}>Add Contact</Text>
-      </TouchableOpacity>
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={styles.importBtn}
+          activeOpacity={0.85}
+          onPress={handleImportFromPhonebook}
+          disabled={loading}
+        >
+          <Ionicons name="book" size={18} color="#8b5cf6" />
+          <Text style={styles.importBtnText}>Import Phonebook</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.fab}
+          activeOpacity={0.85}
+          onPress={() => setModalVisible(true)}
+        >
+          <Ionicons name="person-add" size={18} color="#ffffff" />
+          <Text style={styles.fabText}>Add Contact</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Add Contact Modal */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Emergency Contact</Text>
+              <Text style={styles.modalTitle}>Emergency Contact</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Ionicons name="close" size={20} color="#94a3b8" />
               </TouchableOpacity>
@@ -105,7 +162,7 @@ export function ContactsScreen() {
               <Text style={styles.label}>PHONE NUMBER</Text>
               <TextInput
                 style={styles.input}
-                placeholder="+1 555-0199"
+                placeholder="+91 9876543210"
                 placeholderTextColor="#64748b"
                 keyboardType="phone-pad"
                 value={phone}
@@ -146,7 +203,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#090d16",
   },
   content: {
-    paddingBottom: 90,
+    paddingBottom: 110,
   },
   infoBanner: {
     flexDirection: "row",
@@ -179,27 +236,50 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
     fontSize: 13,
     marginTop: 4,
+    textAlign: "center",
   },
-  fab: {
+  bottomBar: {
     position: "absolute",
-    bottom: 24,
+    bottom: 20,
+    left: 20,
     right: 20,
     flexDirection: "row",
+    gap: 12,
+  },
+  importBtn: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#8b5cf6",
-    paddingHorizontal: 20,
+    justifyContent: "center",
+    backgroundColor: "#1e293b",
     paddingVertical: 14,
-    borderRadius: 30,
-    elevation: 6,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(139, 92, 246, 0.4)",
+    gap: 8,
+  },
+  importBtnText: {
+    color: "#cbd5e1",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  fab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8b5cf6",
+    paddingVertical: 14,
+    borderRadius: 24,
+    gap: 8,
     shadowColor: "#8b5cf6",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 10,
-    gap: 8,
   },
   fabText: {
     color: "#ffffff",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
   },
   modalOverlay: {

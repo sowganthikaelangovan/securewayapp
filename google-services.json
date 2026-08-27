@@ -1,0 +1,25 @@
+{
+  "project_info": {
+    "project_number": "182883918097",
+    "project_id": "college-app-8ebac",
+    "storage_bucket": "college-app-8ebac.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:182883918097:android:8792b90a801d5fde8decb0",
+        "android_client_info": {
+          "package_name": "com.secureway.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRVTd2BO66Aq7JCuujMqOXYQDThGmW4Pc"
+        }
+      ],
+      "services": {}
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -9,15 +9,6 @@ function createSupabaseClient() {
       if (process.env[generalKey]) return process.env[generalKey];
       if (process.env[`EXPO_PUBLIC_${generalKey}`]) return process.env[`EXPO_PUBLIC_${generalKey}`];
     }
-    try {
-      // @ts-ignore
-      if (typeof import.meta !== 'undefined' && import.meta?.env) {
-        // @ts-ignore
-        return import.meta.env[viteKey] || import.meta.env[generalKey];
-      }
-    } catch {
-      // import.meta is not supported in Hermes / React Native
-    }
     return undefined;
   };
 

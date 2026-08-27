@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { MapPin, Share2, Navigation, Wifi } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useSecureway, updateMyLocation } from "@/lib/secureway-store";
+import { reverseGeocodeCoords, getCurrentLiveLocation } from "@/lib/location-service";
 
 export const Route = createFileRoute("/app/location")({
   head: () => ({ meta: [{ title: "Location · SecureWay" }] }),
@@ -11,8 +12,27 @@ export const Route = createFileRoute("/app/location")({
 
 function LocationPage() {
   const { user } = useSecureway();
-  const [sharing, setSharing] = useState(false);
+  const [sharing, setSharing] = useState(true);
+  const [address, setAddress] = useState<string>("Acquiring live location...");
   const watchId = useRef<number | null>(null);
+
+  const lat = user?.lat ?? 0;
+  const lng = user?.lng ?? 0;
+  const hasCoords = lat !== 0 || lng !== 0;
+
+  useEffect(() => {
+    getCurrentLiveLocation().then((loc) => {
+      if (loc) {
+        reverseGeocodeCoords(loc.lat, loc.lng).then(setAddress).catch(() => {});
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (hasCoords) {
+      reverseGeocodeCoords(lat, lng).then(setAddress).catch(() => {});
+    }
+  }, [lat, lng, hasCoords]);
 
   useEffect(() => {
     if (!sharing) {
@@ -65,8 +85,10 @@ function LocationPage() {
         </div>
         <div className="p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Current location</p>
-          <p className="mt-1 font-semibold text-lg">MG Road, Bangalore</p>
-          <p className="text-sm text-muted-foreground">{user?.lat.toFixed(4)}° N, {user?.lng.toFixed(4)}° E</p>
+          <p className="mt-1 font-semibold text-lg">{address}</p>
+          <p className="text-sm text-muted-foreground">
+            {hasCoords ? `${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E` : "Locating..."}
+          </p>
         </div>
       </div>
 
@@ -80,7 +102,7 @@ function LocationPage() {
       </button>
 
       <div className="mt-6 grid grid-cols-2 gap-3">
-        <Stat icon={MapPin} label="Accuracy" value="~8 m" tint="bg-info/15 text-info" />
+        <Stat icon={MapPin} label="Accuracy" value="~5 m (GPS)" tint="bg-info/15 text-info" />
         <Stat icon={Navigation} label="Last update" value="Just now" tint="bg-violet/15 text-violet" />
       </div>
 

@@ -9,18 +9,37 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.secureway.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "SecureWay requires location access to send emergency SOS alerts with your precise coordinates.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "SecureWay shares live location updates with your emergency contacts during active alerts."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SecureWay continuously shares live location updates with your emergency contacts while using the app and in the background.",
+        "NSLocationAlwaysUsageDescription": "SecureWay tracks your live location in the background to ensure your safety shield remains active even when the app is closed.",
+        "NSContactsUsageDescription": "SecureWay requires access to your phone contacts so you can easily select and add trusted emergency contacts.",
+        "UIBackgroundModes": ["location"]
       }
     },
     "android": {
       "package": "com.secureway.app",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "READ_CONTACTS",
+        "SEND_SMS",
         "CALL_PHONE"
       ]
-    }
+    },
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.182883918097-u736b15ls1nuulqd7gm1d8b4f2ebeu1p"
+        }
+      ]
+    ]
   }
 }
+

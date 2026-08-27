@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,17 +8,114 @@ import {
   SafeAreaView,
   StyleSheet,
   Share,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useSecureway, updateMyLocation } from "@/lib/secureway-store";
+import { useSecureway } from "@/lib/secureway-store";
+import {
+  requestForegroundLocationPermission,
+  requestBackgroundLocationPermission,
+  getCurrentLiveLocation,
+  reverseGeocodeCoords,
+  startLiveLocationWatch,
+  stopLiveLocationWatch,
+} from "@/lib/location-service";
 import { AppHeader } from "../components/AppHeader";
 
 export function LocationScreen() {
   const { user } = useSecureway();
   const [isSharing, setIsSharing] = useState(true);
+  const [backgroundEnabled, setBackgroundEnabled] = useState(false);
+  const [address, setAddress] = useState<string | null>(null);
+  const [loadingLoc, setLoadingLoc] = useState(false);
 
-  const lat = user?.lat ?? 12.9716;
-  const lng = user?.lng ?? 77.5946;
+  const lat = user?.lat ?? 0;
+  const lng = user?.lng ?? 0;
+  const hasCoords = lat !== 0 || lng !== 0;
+
+  useEffect(() => {
+    initLocation();
+    return () => {
+      stopLiveLocationWatch();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (hasCoords) {
+      reverseGeocodeCoords(lat, lng).then(setAddress).catch(() => {});
+    }
+  }, [lat, lng]);
+
+  const initLocation = async () => {
+    setLoadingLoc(true);
+    const fgGranted = await requestForegroundLocationPermission();
+    if (!fgGranted) {
+      Alert.alert(
+        "Location Permission Required",
+        "SecureWay needs location permission to monitor your live position and keep you safe."
+      );
+      setLoadingLoc(false);
+      return;
+    }
+
+    const currentLoc = await getCurrentLiveLocation();
+    if (currentLoc) {
+      const addr = await reverseGeocodeCoords(currentLoc.lat, currentLoc.lng);
+      setAddress(addr);
+    }
+    setLoadingLoc(false);
+
+    if (isSharing) {
+      await startLiveLocationWatch();
+    }
+  };
+
+  const handleToggleSharing = async (value: boolean) => {
+    setIsSharing(value);
+    if (value) {
+      const fgGranted = await requestForegroundLocationPermission();
+      if (fgGranted) {
+        await startLiveLocationWatch();
+      } else {
+        setIsSharing(false);
+      }
+    } else {
+      stopLiveLocationWatch();
+    }
+  };
+
+  const handleToggleBackground = async (value: boolean) => {
+    if (value) {
+      const bgGranted = await requestBackgroundLocationPermission();
+      if (bgGranted) {
+        setBackgroundEnabled(true);
+        Alert.alert(
+          "Background Tracking Active",
+          "SecureWay will now update your live position even when the app is running in the background."
+        );
+      } else {
+        setBackgroundEnabled(false);
+        Alert.alert(
+          "Background Permission Denied",
+          "Please enable 'Always Allow' location permission in your device settings to allow background safety tracking."
+        );
+      }
+    } else {
+      setBackgroundEnabled(false);
+    }
+  };
+
+  const handleRefreshGps = async () => {
+    setLoadingLoc(true);
+    const loc = await getCurrentLiveLocation();
+    if (loc) {
+      const addr = await reverseGeocodeCoords(loc.lat, loc.lng);
+      setAddress(addr);
+    }
+    setLoadingLoc(false);
+  };
+
   const shareUrl = `https://secureway.app/track?lat=${lat}&lng=${lng}`;
 
   const handleShare = async () => {
@@ -30,13 +127,6 @@ export function LocationScreen() {
     } catch (err) {
       console.error("Share location error", err);
     }
-  };
-
-  const handleRefreshGps = async () => {
-    // Mock standard GPS update delta
-    const deltaLat = (Math.random() - 0.5) * 0.002;
-    const deltaLng = (Math.random() - 0.5) * 0.002;
-    await updateMyLocation(lat + deltaLat, lng + deltaLng);
   };
 
   return (
@@ -54,21 +144,34 @@ export function LocationScreen() {
           <Text style={styles.radarTitle}>
             {isSharing ? "Live Tracking Enabled" : "Live Sharing Paused"}
           </Text>
+
+          {address && <Text style={styles.addressText}>{address}</Text>}
+
           <Text style={styles.radarSub}>
             {isSharing
-              ? "Your encrypted GPS position is active and synced with trusted contacts."
-              : "Enable live sharing to let your circle view your journey on the map."}
+              ? "Your encrypted GPS position is active and synced live."
+              : "Enable live sharing to let your circle view your journey."}
           </Text>
 
-          <View style={styles.coordsBox}>
-            <Ionicons name="location" size={16} color="#0284c7" />
-            <Text style={styles.coordsText}>
-              {lat.toFixed(4)}° N, {lng.toFixed(4)}° E
-            </Text>
-          </View>
+          {hasCoords ? (
+            <View style={styles.coordsBox}>
+              <Ionicons name="location" size={16} color="#0284c7" />
+              <Text style={styles.coordsText}>
+                {lat.toFixed(4)}° N, {lng.toFixed(4)}° E
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.coordsBox}>
+              <Text style={styles.coordsText}>Acquiring GPS Signal...</Text>
+            </View>
+          )}
 
           <TouchableOpacity style={styles.refreshBtn} activeOpacity={0.7} onPress={handleRefreshGps}>
-            <Text style={styles.refreshBtnText}>Update GPS Signal</Text>
+            {loadingLoc ? (
+              <ActivityIndicator color="#38bdf8" size="small" />
+            ) : (
+              <Text style={styles.refreshBtnText}>Fetch Current GPS Location</Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -78,29 +181,30 @@ export function LocationScreen() {
             <Ionicons name="shield-checkmark" size={20} color="#10b981" />
             <View style={styles.tileText}>
               <Text style={styles.tileTitle}>Share with Emergency Contacts</Text>
-              <Text style={styles.tileSub}>Real-time location stream</Text>
+              <Text style={styles.tileSub}>Real-time location stream while using app</Text>
             </View>
           </View>
           <Switch
             value={isSharing}
-            onValueChange={setIsSharing}
+            onValueChange={handleToggleSharing}
             trackColor={{ false: "#334155", true: "#0284c7" }}
             thumbColor="#f8fafc"
           />
         </View>
 
-        {/* Battery Tile */}
+        {/* Background Location Toggle Tile */}
         <View style={styles.tile}>
           <View style={styles.tileLeft}>
-            <Ionicons name="battery-charging" size={20} color="#f59e0b" />
+            <Ionicons name="location" size={20} color="#8b5cf6" />
             <View style={styles.tileText}>
-              <Text style={styles.tileTitle}>Low Battery Alerting</Text>
-              <Text style={styles.tileSub}>Notify contacts if battery drops below 15%</Text>
+              <Text style={styles.tileTitle}>Track When App Is Closed</Text>
+              <Text style={styles.tileSub}>Background "Always Allow" location shield</Text>
             </View>
           </View>
           <Switch
-            value={true}
-            trackColor={{ false: "#334155", true: "#0284c7" }}
+            value={backgroundEnabled}
+            onValueChange={handleToggleBackground}
+            trackColor={{ false: "#334155", true: "#8b5cf6" }}
             thumbColor="#f8fafc"
           />
         </View>
@@ -153,6 +257,13 @@ const styles = StyleSheet.create({
     color: "#f8fafc",
     fontSize: 20,
     fontWeight: "700",
+  },
+  addressText: {
+    color: "#38bdf8",
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 6,
   },
   radarSub: {
     color: "#94a3b8",

@@ -8,6 +8,8 @@ import {
   Linking,
   StyleSheet,
   SafeAreaView,
+  Alert,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSecureway, recordSos, clearAlert, Contact } from "@/lib/secureway-store";
@@ -15,15 +17,61 @@ import { AppHeader } from "../components/AppHeader";
 import { StatusBanner } from "../components/StatusBanner";
 import { SosButton } from "../components/SosButton";
 import { QuickActionTile } from "../components/QuickActionTile";
+import { getCurrentLiveLocation, reverseGeocodeCoords } from "@/lib/location-service";
 
 export function HomeScreen({ navigation }: any) {
   const { user, contacts } = useSecureway();
   const [sosModalVisible, setSosModalVisible] = useState(false);
+  const [sosAddress, setSosAddress] = useState<string>("");
+  const [sendingSms, setSendingSms] = useState(false);
+
+  const sendEmergencySmsToContacts = async (lat: number, lng: number, addressStr: string) => {
+    if (contacts.length === 0) return;
+    const phoneNumbers = contacts.map((c) => c.phone.replace(/[^\d+]/g, "")).filter(Boolean);
+    if (phoneNumbers.length === 0) return;
+
+    const googleMapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
+    const locationText = addressStr ? `${addressStr} (${googleMapsUrl})` : googleMapsUrl;
+    const message = `🚨 EMERGENCY SOS ALERT! I need immediate help. My live GPS location: ${locationText}. Sent via SecureWay App.`;
+
+    setSendingSms(true);
+    try {
+      if (Platform.OS !== "web") {
+        const ExpoSms = await import("expo-sms");
+        const isAvailable = await ExpoSms.isAvailableAsync();
+        if (isAvailable) {
+          await ExpoSms.sendSMSAsync(phoneNumbers, message);
+          return;
+        }
+      }
+      // Fallback: SMS URL scheme
+      const recipients = phoneNumbers.join(",");
+      const smsUrl = `sms:${recipients}?body=${encodeURIComponent(message)}`;
+      await Linking.openURL(smsUrl);
+    } catch (err) {
+      console.warn("SMS trigger note:", err);
+    } finally {
+      setSendingSms(false);
+    }
+  };
 
   const handleSosPress = async () => {
     setSosModalVisible(true);
     try {
-      await recordSos(user?.lat ?? 12.9716, user?.lng ?? 77.5946);
+      let lat = user?.lat ?? 0;
+      let lng = user?.lng ?? 0;
+      let addressStr = "";
+
+      const currentLoc = await getCurrentLiveLocation();
+      if (currentLoc) {
+        lat = currentLoc.lat;
+        lng = currentLoc.lng;
+        addressStr = await reverseGeocodeCoords(lat, lng);
+        setSosAddress(addressStr);
+      }
+
+      await recordSos(lat, lng);
+      await sendEmergencySmsToContacts(lat, lng, addressStr);
     } catch (err) {
       console.error("SOS trigger error", err);
     }
@@ -97,21 +145,48 @@ export function HomeScreen({ navigation }: any) {
               Your live GPS coordinates were broadcasted to {contacts.length} emergency contacts.
             </Text>
 
+            {sosAddress ? (
+              <View style={styles.locationBadge}>
+                <Ionicons name="pin" size={14} color="#38bdf8" />
+                <Text style={styles.locationBadgeText} numberOfLines={2}>
+                  {sosAddress}
+                </Text>
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.broadcastSmsBtn}
+              activeOpacity={0.8}
+              disabled={sendingSms}
+              onPress={() => sendEmergencySmsToContacts(user?.lat ?? 0, user?.lng ?? 0, sosAddress)}
+            >
+              <Ionicons name="paper-plane" size={16} color="#ffffff" />
+              <Text style={styles.broadcastSmsText}>
+                {sendingSms ? "Preparing SMS..." : "Send Location SMS to All Contacts"}
+              </Text>
+            </TouchableOpacity>
+
             <ScrollView style={styles.contactsList} showsVerticalScrollIndicator={false}>
-              {contacts.map((c: Contact) => (
-                <View key={c.id} style={styles.modalContactItem}>
-                  <View>
-                    <Text style={styles.contactName}>{c.name}</Text>
-                    <Text style={styles.contactPhone}>{c.phone}</Text>
+              {contacts.length === 0 ? (
+                <Text style={{ color: "#94a3b8", textAlign: "center", marginVertical: 12 }}>
+                  No emergency contacts added yet. Go to Contacts screen to add friends.
+                </Text>
+              ) : (
+                contacts.map((c: Contact) => (
+                  <View key={c.id} style={styles.modalContactItem}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.contactName}>{c.name}</Text>
+                      <Text style={styles.contactPhone}>{c.phone}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.dialBtn}
+                      onPress={() => Linking.openURL(`tel:${c.phone.replace(/[^\d+]/g, "")}`)}
+                    >
+                      <Ionicons name="call" size={16} color="#ffffff" />
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    style={styles.dialBtn}
-                    onPress={() => Linking.openURL(`tel:${c.phone.replace(/[^\d+]/g, "")}`)}
-                  >
-                    <Ionicons name="call" size={16} color="#ffffff" />
-                  </TouchableOpacity>
-                </View>
-              ))}
+                ))
+              )}
             </ScrollView>
 
             <TouchableOpacity style={styles.dismissBtn} onPress={() => setSosModalVisible(false)}>
@@ -157,7 +232,7 @@ const styles = StyleSheet.create({
     padding: 24,
     borderWidth: 1,
     borderColor: "#1e293b",
-    maxHeight: "80%",
+    maxHeight: "85%",
   },
   modalHeader: {
     flexDirection: "row",
@@ -189,9 +264,38 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 18,
   },
+  locationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(56, 189, 248, 0.12)",
+    padding: 10,
+    borderRadius: 12,
+    marginVertical: 12,
+    gap: 8,
+  },
+  locationBadgeText: {
+    color: "#38bdf8",
+    fontSize: 12,
+    flex: 1,
+  },
+  broadcastSmsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ef4444",
+    paddingVertical: 12,
+    borderRadius: 14,
+    gap: 8,
+    marginVertical: 8,
+  },
+  broadcastSmsText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   contactsList: {
-    marginVertical: 16,
-    maxHeight: 200,
+    marginVertical: 10,
+    maxHeight: 180,
   },
   modalContactItem: {
     flexDirection: "row",

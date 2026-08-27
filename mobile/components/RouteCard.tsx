@@ -8,8 +8,8 @@ export interface SafeRouteItem {
   distance: string;
   duration: string;
   safetyScore: number;
-  litLevel: "High" | "Medium";
-  crowdLevel: "Busy" | "Moderate";
+  litLevel: "High" | "Medium" | "Low";
+  crowdLevel: "Busy" | "Moderate" | "Quiet";
 }
 
 interface RouteCardProps {
