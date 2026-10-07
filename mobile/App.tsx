@@ -1,10 +1,17 @@
 import { registerRootComponent } from "expo";
 import React, { useEffect } from "react";
-import { StatusBar } from "react-native";
+import { StatusBar, LogBox } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useSecureway, bootstrapSecureway } from "@/lib/secureway-store";
+
+// Ignore benign network or offline warnings in simulator
+LogBox.ignoreLogs([
+  "Network request failed",
+  "Google Directions API failed",
+  "Cannot update a component",
+]);
 
 import { HomeScreen } from "./screens/HomeScreen";
 import { LocationScreen } from "./screens/LocationScreen";

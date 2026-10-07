@@ -22,6 +22,7 @@ import {
   stopLiveLocationWatch,
 } from "@/lib/location-service";
 import { AppHeader } from "../components/AppHeader";
+import { MapboxMapView } from "../components/MapboxMapView";
 
 export function LocationScreen() {
   const { user } = useSecureway();
@@ -173,6 +174,19 @@ export function LocationScreen() {
               <Text style={styles.refreshBtnText}>Fetch Current GPS Location</Text>
             )}
           </TouchableOpacity>
+        </View>
+
+        {/* Live Mapbox Vector Map */}
+        <View style={{ marginBottom: 18 }}>
+          <Text style={{ color: "#94a3b8", fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginBottom: 8 }}>
+            LIVE MAPBOX SURVEILLANCE
+          </Text>
+          <MapboxMapView
+            userLat={hasCoords ? lat : 12.9716}
+            userLng={hasCoords ? lng : 77.5946}
+            zoom={15}
+            style={{ height: 220, borderRadius: 20 }}
+          />
         </View>
 
         {/* Sharing Toggle Tile */}

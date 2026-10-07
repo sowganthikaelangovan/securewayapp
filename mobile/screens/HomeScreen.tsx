@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   Alert,
   Platform,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSecureway, recordSos, clearAlert, Contact } from "@/lib/secureway-store";
@@ -23,17 +24,54 @@ export function HomeScreen({ navigation }: any) {
   const { user, contacts } = useSecureway();
   const [sosModalVisible, setSosModalVisible] = useState(false);
   const [sosAddress, setSosAddress] = useState<string>("");
+  const [specificPhone, setSpecificPhone] = useState<string>("");
   const [sendingSms, setSendingSms] = useState(false);
 
-  const sendEmergencySmsToContacts = async (lat: number, lng: number, addressStr: string) => {
-    if (contacts.length === 0) return;
-    const phoneNumbers = contacts.map((c) => c.phone.replace(/[^\d+]/g, "")).filter(Boolean);
-    if (phoneNumbers.length === 0) return;
-
+  const getEmergencyMessage = (lat: number, lng: number, addressStr: string) => {
     const googleMapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
     const locationText = addressStr ? `${addressStr} (${googleMapsUrl})` : googleMapsUrl;
-    const message = `🚨 EMERGENCY SOS ALERT! I need immediate help. My live GPS location: ${locationText}. Sent via SecureWay App.`;
+    return `🚨 EMERGENCY SOS ALERT! I need immediate help.\nMy live GPS location: ${locationText}\nSent via SecureWay App.`;
+  };
 
+  const sendWhatsAppEmergency = (targetPhone?: string) => {
+    const phone = targetPhone || specificPhone || (contacts.length > 0 ? contacts[0].phone : "");
+    const cleanNumber = phone.replace(/[^\d]/g, "");
+
+    if (!cleanNumber) {
+      Alert.alert(
+        "Enter Phone Number",
+        "Please type a phone number in the box above or select an emergency contact."
+      );
+      return;
+    }
+
+    const message = getEmergencyMessage(user?.lat ?? 0, user?.lng ?? 0, sosAddress);
+    const waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
+
+    Linking.openURL(waUrl).catch((err) => {
+      console.warn("WhatsApp open error:", err);
+      Alert.alert("Error Opening WhatsApp", "Make sure WhatsApp is installed on this device.");
+    });
+  };
+
+  const sendSmsEmergency = async (targetPhone?: string) => {
+    let phoneNumbers: string[] = [];
+    if (targetPhone || specificPhone) {
+      const clean = (targetPhone || specificPhone).replace(/[^\d+]/g, "");
+      if (clean) phoneNumbers = [clean];
+    } else if (contacts.length > 0) {
+      phoneNumbers = contacts.map((c) => c.phone.replace(/[^\d+]/g, "")).filter(Boolean);
+    }
+
+    if (phoneNumbers.length === 0) {
+      Alert.alert(
+        "Enter Phone Number",
+        "Please enter a recipient phone number or add an emergency contact."
+      );
+      return;
+    }
+
+    const message = getEmergencyMessage(user?.lat ?? 0, user?.lng ?? 0, sosAddress);
     setSendingSms(true);
     try {
       if (Platform.OS !== "web") {
@@ -44,9 +82,9 @@ export function HomeScreen({ navigation }: any) {
           return;
         }
       }
-      // Fallback: SMS URL scheme
       const recipients = phoneNumbers.join(",");
-      const smsUrl = `sms:${recipients}?body=${encodeURIComponent(message)}`;
+      const separator = Platform.OS === "ios" ? "&" : "?";
+      const smsUrl = `sms:${recipients}${separator}body=${encodeURIComponent(message)}`;
       await Linking.openURL(smsUrl);
     } catch (err) {
       console.warn("SMS trigger note:", err);
@@ -71,7 +109,10 @@ export function HomeScreen({ navigation }: any) {
       }
 
       await recordSos(lat, lng);
-      await sendEmergencySmsToContacts(lat, lng, addressStr);
+      // Auto-dispatch to contacts if present
+      if (contacts.length > 0) {
+        void sendSmsEmergency();
+      }
     } catch (err) {
       console.error("SOS trigger error", err);
     }
@@ -154,22 +195,65 @@ export function HomeScreen({ navigation }: any) {
               </View>
             ) : null}
 
-            <TouchableOpacity
-              style={styles.broadcastSmsBtn}
-              activeOpacity={0.8}
-              disabled={sendingSms}
-              onPress={() => sendEmergencySmsToContacts(user?.lat ?? 0, user?.lng ?? 0, sosAddress)}
-            >
-              <Ionicons name="paper-plane" size={16} color="#ffffff" />
-              <Text style={styles.broadcastSmsText}>
-                {sendingSms ? "Preparing SMS..." : "Send Location SMS to All Contacts"}
-              </Text>
-            </TouchableOpacity>
+            {/* Direct Dispatch to Specific Person / Guardian */}
+            <View style={styles.specificBox}>
+              <Text style={styles.specificLabel}>SEND DIRECT TO SPECIFIC PERSON / GUARDIAN</Text>
+              <View style={styles.phoneInputRow}>
+                <Ionicons name="phone-portrait" size={16} color="#0284c7" />
+                <TextInput
+                  style={styles.specificInput}
+                  placeholder="Enter phone e.g. +91 9876543210"
+                  placeholderTextColor="#64748b"
+                  keyboardType="phone-pad"
+                  value={specificPhone}
+                  onChangeText={setSpecificPhone}
+                />
+              </View>
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={styles.waBtn}
+                  activeOpacity={0.8}
+                  onPress={() => sendWhatsAppEmergency()}
+                >
+                  <Ionicons name="logo-whatsapp" size={17} color="#ffffff" />
+                  <Text style={styles.btnActionText}>WhatsApp</Text>
+                </TouchableOpacity>
 
+                <TouchableOpacity
+                  style={styles.smsBtn}
+                  activeOpacity={0.8}
+                  disabled={sendingSms}
+                  onPress={() => sendSmsEmergency()}
+                >
+                  <Ionicons name="chatbubble-ellipses" size={17} color="#ffffff" />
+                  <Text style={styles.btnActionText}>{sendingSms ? "Sending..." : "SMS Alert"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Broadcast to all contacts */}
+            {contacts.length > 0 && (
+              <TouchableOpacity
+                style={styles.broadcastSmsBtn}
+                activeOpacity={0.8}
+                disabled={sendingSms}
+                onPress={() => sendSmsEmergency()}
+              >
+                <Ionicons name="paper-plane" size={16} color="#ffffff" />
+                <Text style={styles.broadcastSmsText}>
+                  {sendingSms ? "Preparing SMS..." : `Send SMS to All ${contacts.length} Contacts`}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Contacts List with Instant One-Tap Buttons */}
+            <Text style={[styles.specificLabel, { marginTop: 12, marginBottom: 6 }]}>
+              EMERGENCY CONTACTS ({contacts.length})
+            </Text>
             <ScrollView style={styles.contactsList} showsVerticalScrollIndicator={false}>
               {contacts.length === 0 ? (
                 <Text style={{ color: "#94a3b8", textAlign: "center", marginVertical: 12 }}>
-                  No emergency contacts added yet. Go to Contacts screen to add friends.
+                  No emergency contacts added yet. Type a number above to dispatch alert!
                 </Text>
               ) : (
                 contacts.map((c: Contact) => (
@@ -178,12 +262,26 @@ export function HomeScreen({ navigation }: any) {
                       <Text style={styles.contactName}>{c.name}</Text>
                       <Text style={styles.contactPhone}>{c.phone}</Text>
                     </View>
-                    <TouchableOpacity
-                      style={styles.dialBtn}
-                      onPress={() => Linking.openURL(`tel:${c.phone.replace(/[^\d+]/g, "")}`)}
-                    >
-                      <Ionicons name="call" size={16} color="#ffffff" />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <TouchableOpacity
+                        style={[styles.miniBtn, { backgroundColor: "#25D366" }]}
+                        onPress={() => sendWhatsAppEmergency(c.phone)}
+                      >
+                        <Ionicons name="logo-whatsapp" size={16} color="#ffffff" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.miniBtn, { backgroundColor: "#0284c7" }]}
+                        onPress={() => sendSmsEmergency(c.phone)}
+                      >
+                        <Ionicons name="chatbubble-ellipses" size={15} color="#ffffff" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.miniBtn, { backgroundColor: "#ef4444" }]}
+                        onPress={() => Linking.openURL(`tel:${c.phone.replace(/[^\d+]/g, "")}`)}
+                      >
+                        <Ionicons name="call" size={15} color="#ffffff" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 ))
               )}
@@ -323,6 +421,74 @@ const styles = StyleSheet.create({
     backgroundColor: "#10b981",
     alignItems: "center",
     justifyContent: "center",
+  },
+  miniBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  specificBox: {
+    backgroundColor: "#1e293b",
+    borderRadius: 16,
+    padding: 12,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  specificLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#94a3b8",
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  phoneInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0d1322",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#1e293b",
+    marginBottom: 10,
+  },
+  specificInput: {
+    flex: 1,
+    color: "#f8fafc",
+    fontSize: 14,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  waBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#25D366",
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  smsBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0284c7",
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  btnActionText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
   },
   dismissBtn: {
     backgroundColor: "#334155",

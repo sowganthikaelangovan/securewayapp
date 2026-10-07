@@ -28,9 +28,9 @@ function createSupabaseClient() {
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: {
       storage: typeof window !== 'undefined' && typeof window.localStorage !== 'undefined' ? window.localStorage : undefined,
-      persistSession: true,
-      autoRefreshToken: true,
-    }
+      persistSession: typeof window !== 'undefined',
+      autoRefreshToken: false,
+    },
   });
 }
 

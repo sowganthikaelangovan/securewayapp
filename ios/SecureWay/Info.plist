@@ -43,12 +43,6 @@
           <string>exp+secureway-app</string>
         </array>
       </dict>
-      <dict>
-        <key>CFBundleURLSchemes</key>
-        <array>
-          <string>app-1-182883918097-ios-756bea2a5366e4e98decb0</string>
-        </array>
-      </dict>
     </array>
     <key>CFBundleVersion</key>
     <string>1</string>

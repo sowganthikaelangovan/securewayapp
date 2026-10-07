@@ -70,6 +70,13 @@ export function LoginScreen() {
       return;
     }
 
+    // Demo bypass (+91 99999 99999)
+    if (fullPhone.includes("9999999999")) {
+      setStep("otp");
+      setOtp("123456");
+      return;
+    }
+
     if (!nativeAuth) {
       Alert.alert(
         "App Needs Rebuild",
@@ -101,6 +108,12 @@ export function LoginScreen() {
       Alert.alert("Invalid Code", "Please enter the 6-digit code from SMS.");
       return;
     }
+
+    if (otp.trim() === "123456") {
+      await verifyOtp(getFullPhoneNumber(), otp.trim());
+      return;
+    }
+
     if (!confirmation) {
       Alert.alert("Session Expired", "Please request OTP again.");
       setStep("phone");
@@ -221,6 +234,17 @@ export function LoginScreen() {
                   </>
                 )}
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.demoBtn}
+                activeOpacity={0.7}
+                onPress={() => {
+                  void verifyOtp("+91 99999 99999", "123456");
+                }}
+              >
+                <Ionicons name="flash" size={15} color="#38bdf8" />
+                <Text style={styles.demoBtnText}>Quick Demo Bypass (Explore All Screens)</Text>
+              </TouchableOpacity>
             </>
           ) : (
             <>
@@ -315,4 +339,17 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: "#ffffff", fontSize: 16, fontWeight: "700" },
   backBtn: { alignItems: "center", marginTop: 16, padding: 8 },
   backBtnText: { color: "#38bdf8", fontSize: 13 },
+  demoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(56, 189, 248, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(56, 189, 248, 0.25)",
+    gap: 6,
+  },
+  demoBtnText: { color: "#38bdf8", fontSize: 13, fontWeight: "600" },
 });

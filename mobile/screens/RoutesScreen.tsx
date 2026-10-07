@@ -16,6 +16,7 @@ import { getCurrentLiveLocation, reverseGeocodeCoords } from "@/lib/location-ser
 import { calculateSafeRoutes, ComputedRoute } from "@/lib/maps-service";
 import { AppHeader } from "../components/AppHeader";
 import { RouteCard, SafeRouteItem } from "../components/RouteCard";
+import { MapboxMapView } from "../components/MapboxMapView";
 
 export function RoutesScreen() {
   const { user } = useSecureway();
@@ -24,6 +25,7 @@ export function RoutesScreen() {
   const [routes, setRoutes] = useState<ComputedRoute[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"All" | "MostLit" | "HighestSafety">("All");
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
 
   const userLat = user?.lat ?? 0;
   const userLng = user?.lng ?? 0;
@@ -75,11 +77,14 @@ export function RoutesScreen() {
     });
 
   const handleSelectRoute = (route: SafeRouteItem) => {
+    setSelectedRouteId(route.id);
     Alert.alert(
       "Navigation Started",
       `Safe navigation initiated along ${route.name} (${route.distance}, ${route.duration}). Your live GPS location is continuously monitored for deviations.`
     );
   };
+
+  const activeRoute = routes.find((r) => r.id === selectedRouteId) || routes[0];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -112,6 +117,17 @@ export function RoutesScreen() {
           <TouchableOpacity style={styles.findBtn} onPress={handleSearchRoutes}>
             <Text style={styles.findBtnText}>Search</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Live Mapbox Map with Safety Corridor */}
+        <View style={{ marginBottom: 16 }}>
+          <MapboxMapView
+            userLat={userLat !== 0 ? userLat : 12.9716}
+            userLng={userLng !== 0 ? userLng : 77.5946}
+            zoom={routes.length > 0 ? 14 : 15}
+            routeCoordinates={activeRoute?.routeCoordinates}
+            style={{ height: 230, borderRadius: 20 }}
+          />
         </View>
 
         {/* Filter Pills */}
@@ -161,7 +177,7 @@ export function RoutesScreen() {
         {loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#0284c7" />
-            <Text style={styles.loadingText}>Computing safest routes via Google Maps...</Text>
+            <Text style={styles.loadingText}>Computing safest routes via Mapbox Pedestrian Network...</Text>
           </View>
         )}
 
@@ -179,7 +195,11 @@ export function RoutesScreen() {
         {/* Route Items */}
         {!loading &&
           filteredRoutes.map((route) => (
-            <RouteCard key={route.id} route={route} onSelect={handleSelectRoute} />
+            <RouteCard
+              key={route.id}
+              route={route}
+              onSelect={handleSelectRoute}
+            />
           ))}
       </ScrollView>
     </SafeAreaView>

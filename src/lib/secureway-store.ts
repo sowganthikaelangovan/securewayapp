@@ -38,43 +38,73 @@ export async function logout() {
 
 // ---------- Data Sync ----------
 export async function refresh(): Promise<void> {
-  const firebaseUser = firebaseAuth.currentUser;
-  const { data: sessionData } = await supabase.auth.getSession();
-  const supabaseUser = sessionData.session?.user;
+  try {
+    const firebaseUser = firebaseAuth.currentUser;
+    let sessionData: any = null;
+    try {
+      const res = await supabase.auth.getSession();
+      sessionData = res.data;
+    } catch {
+      // offline / supabase network unavailable
+    }
+    const supabaseUser = sessionData?.session?.user;
 
-  const uid = firebaseUser?.uid || supabaseUser?.id;
-  if (!uid) {
-    setState(() => empty);
-    return;
+    const uid = firebaseUser?.uid || supabaseUser?.id;
+    if (!uid) {
+      setState(() => empty);
+      return;
+    }
+
+    setState((s) => ({ ...s, loading: true }));
+    const [profileRes, contactsRes, alertsRes] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", uid)
+        .maybeSingle()
+        .then((r: any) => r)
+        .catch(() => ({ data: null })),
+      supabase
+        .from("contacts")
+        .select("*")
+        .eq("user_id", uid)
+        .order("created_at", { ascending: true })
+        .then((r: any) => r)
+        .catch(() => ({ data: [] })),
+      supabase
+        .from("sos_alerts")
+        .select("*")
+        .eq("user_id", uid)
+        .order("created_at", { ascending: false })
+        .limit(50)
+        .then((r: any) => r)
+        .catch(() => ({ data: [] })),
+    ]);
+
+    const p = profileRes?.data;
+    const userPhone = firebaseUser?.phoneNumber || p?.phone || supabaseUser?.phone || "";
+    const userName = firebaseUser?.displayName || p?.name || "User";
+
+    const user: User = {
+      id: uid,
+      phone: userPhone,
+      name: userName,
+      status: (p?.status as "safe" | "alert") ?? "safe",
+      lat: p?.lat ?? 0,
+      lng: p?.lng ?? 0,
+    };
+
+    setState(() => ({
+      user,
+      contacts: (contactsRes?.data ?? []) as Contact[],
+      alerts: ((alertsRes?.data ?? []) as Array<{ id: string; lat: number; lng: number; msg: string; created_at: string }>)
+        .map((a) => ({ id: a.id, lat: a.lat, lng: a.lng, msg: a.msg, time: a.created_at })),
+      loading: false,
+    }));
+  } catch (err) {
+    console.warn("SecureWay refresh note (network/backend offline):", err);
+    setState((s) => ({ ...s, loading: false }));
   }
-
-  setState((s) => ({ ...s, loading: true }));
-  const [profileRes, contactsRes, alertsRes] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
-    supabase.from("contacts").select("*").eq("user_id", uid).order("created_at", { ascending: true }),
-    supabase.from("sos_alerts").select("*").eq("user_id", uid).order("created_at", { ascending: false }).limit(50),
-  ]);
-
-  const p = profileRes.data;
-  const userPhone = firebaseUser?.phoneNumber || p?.phone || supabaseUser?.phone || "";
-  const userName = firebaseUser?.displayName || p?.name || "User";
-
-  const user: User = {
-    id: uid,
-    phone: userPhone,
-    name: userName,
-    status: (p?.status as "safe" | "alert") ?? "safe",
-    lat: p?.lat ?? 0,
-    lng: p?.lng ?? 0,
-  };
-
-  setState(() => ({
-    user,
-    contacts: (contactsRes.data ?? []) as Contact[],
-    alerts: ((alertsRes.data ?? []) as Array<{ id: string; lat: number; lng: number; msg: string; created_at: string }>)
-      .map((a) => ({ id: a.id, lat: a.lat, lng: a.lng, msg: a.msg, time: a.created_at })),
-    loading: false,
-  }));
 }
 
 export async function addContact(c: Omit<Contact, "id">) {
