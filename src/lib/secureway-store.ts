@@ -57,28 +57,28 @@ export async function refresh(): Promise<void> {
 
     setState((s) => ({ ...s, loading: true }));
     const [profileRes, contactsRes, alertsRes] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", uid)
-        .maybeSingle()
-        .then((r: any) => r)
-        .catch(() => ({ data: null })),
-      supabase
-        .from("contacts")
-        .select("*")
-        .eq("user_id", uid)
-        .order("created_at", { ascending: true })
-        .then((r: any) => r)
-        .catch(() => ({ data: [] })),
-      supabase
-        .from("sos_alerts")
-        .select("*")
-        .eq("user_id", uid)
-        .order("created_at", { ascending: false })
-        .limit(50)
-        .then((r: any) => r)
-        .catch(() => ({ data: [] })),
+      Promise.resolve(
+        supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", uid)
+          .maybeSingle()
+      ).catch(() => ({ data: null })),
+      Promise.resolve(
+        supabase
+          .from("contacts")
+          .select("*")
+          .eq("user_id", uid)
+          .order("created_at", { ascending: true })
+      ).catch(() => ({ data: [] })),
+      Promise.resolve(
+        supabase
+          .from("sos_alerts")
+          .select("*")
+          .eq("user_id", uid)
+          .order("created_at", { ascending: false })
+          .limit(50)
+      ).catch(() => ({ data: [] })),
     ]);
 
     const p = profileRes?.data;
