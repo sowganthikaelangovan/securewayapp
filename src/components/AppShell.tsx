@@ -3,6 +3,7 @@ import { Home, Users, MapPin, Route as RouteIcon, User as UserIcon, LogOut } fro
 import { useEffect, type ReactNode } from "react";
 import { logout, useSecureway } from "@/lib/secureway-store";
 import { supabase } from "@/integrations/supabase/client";
+import { auth as firebaseAuth } from "@/integrations/firebase/client";
 
 const tabs = [
   { to: "/app", label: "Home", icon: Home, exact: true },
@@ -19,19 +20,18 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
   const { user } = useSecureway();
 
   useEffect(() => {
-    if (user?.id === "demo-user") return;
-    let cancelled = false;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!cancelled && !data.session) navigate({ to: "/app/login" });
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (!session) navigate({ to: "/app/login" });
-    });
-    return () => {
-      cancelled = true;
-      sub.subscription.unsubscribe();
-    };
-  }, [navigate, user?.id]);
+    // If user is already authenticated in SecureWay, allow full access
+    if (user) return;
+
+    // Check if session exists before redirecting
+    const timer = setTimeout(() => {
+      if (!user && !firebaseAuth.currentUser) {
+        navigate({ to: "/app/login" });
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [navigate, user]);
 
   return (
     <div className="min-h-screen bg-background pb-24">

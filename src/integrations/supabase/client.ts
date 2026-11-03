@@ -4,6 +4,17 @@ import type { Database } from './types';
 
 function createSupabaseClient() {
   const getEnvVar = (viteKey: string, generalKey: string): string | undefined => {
+    try {
+      const getMetaEnv = new Function("return typeof import.meta !== 'undefined' ? import.meta.env : undefined");
+      const metaEnv = getMetaEnv();
+      if (metaEnv) {
+        if (metaEnv[viteKey]) return metaEnv[viteKey];
+        if (metaEnv[generalKey]) return metaEnv[generalKey];
+        if (metaEnv[`EXPO_PUBLIC_${generalKey}`]) return metaEnv[`EXPO_PUBLIC_${generalKey}`];
+      }
+    } catch {
+      // In Hermes / React Native, import.meta is not evaluated
+    }
     if (typeof process !== 'undefined' && process.env) {
       if (process.env[viteKey]) return process.env[viteKey];
       if (process.env[generalKey]) return process.env[generalKey];
@@ -12,8 +23,12 @@ function createSupabaseClient() {
     return undefined;
   };
 
-  const SUPABASE_URL = getEnvVar('VITE_SUPABASE_URL', 'SUPABASE_URL');
-  const SUPABASE_PUBLISHABLE_KEY = getEnvVar('VITE_SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_PUBLISHABLE_KEY');
+  const SUPABASE_URL =
+    getEnvVar('VITE_SUPABASE_URL', 'SUPABASE_URL') ||
+    'https://mittvvclsehoconuygzm.supabase.co';
+  const SUPABASE_PUBLISHABLE_KEY =
+    getEnvVar('VITE_SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_PUBLISHABLE_KEY') ||
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pdHR2dmNsc2Vob2NvbnV5Z3ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTc4ODIsImV4cCI6MjA5NTk3Mzg4Mn0.jiHapq0MLhkIYwUsYGdhT_WWaQM_pYU9OepQVCDgKj4';
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [

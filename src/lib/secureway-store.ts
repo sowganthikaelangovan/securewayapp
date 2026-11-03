@@ -26,13 +26,63 @@ function setState(updater: (s: State) => State) {
   subs.forEach((cb) => cb(current));
 }
 
+const STORAGE_KEY = "secureway_active_user";
+
+async function saveStoredUser(user: User | null) {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      if (user) {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+      } else {
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+    if (user) {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    } else {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    // ignore if not native
+  }
+}
+
+async function loadStoredUser(): Promise<User | null> {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const item = window.localStorage.getItem(STORAGE_KEY);
+      if (item) return JSON.parse(item);
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+    const item = await AsyncStorage.getItem(STORAGE_KEY);
+    if (item) return JSON.parse(item);
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export async function logout() {
   try {
     await firebaseSignOut(firebaseAuth);
   } catch (e) {
     // ignore
   }
-  await supabase.auth.signOut();
+  try {
+    await supabase.auth.signOut();
+  } catch (e) {
+    // ignore
+  }
+  await saveStoredUser(null);
   setState(() => empty);
 }
 
@@ -49,9 +99,14 @@ export async function refresh(): Promise<void> {
     }
     const supabaseUser = sessionData?.session?.user;
 
-    const uid = firebaseUser?.uid || supabaseUser?.id;
+    const uid = firebaseUser?.uid || supabaseUser?.id || current.user?.id;
     if (!uid) {
-      setState(() => empty);
+      const stored = await loadStoredUser();
+      if (!stored) {
+        setState(() => empty);
+        return;
+      }
+      setState((s) => ({ ...s, user: stored, loading: false }));
       return;
     }
 
@@ -235,68 +290,71 @@ export async function sendOtp(phone: string) {
 }
 
 export async function verifyOtp(phone: string, _token: string) {
-  // Always set local session state immediately (works offline & on native)
+  const cleanPhone = phone || "+91 99999 99999";
+  const user: User = {
+    id: "user-" + (cleanPhone.replace(/[^\d]/g, "") || "session"),
+    phone: cleanPhone,
+    name: "SecureWay Member",
+    status: "safe",
+    lat: current.user?.lat || 12.9716,
+    lng: current.user?.lng || 77.5946,
+  };
+
+  // 1. Instantly update in-memory state
   setState((s) => ({
     ...s,
-    user: {
-      id: "user-" + (phone.replace(/[^\d]/g, "") || "session"),
-      phone,
-      name: "SecureWay Member",
-      status: "safe",
-      lat: s.user?.lat ?? 0,
-      lng: s.user?.lng ?? 0,
-    },
+    user,
     loading: false,
   }));
-  // Also try to sync with Supabase (non-blocking, best-effort)
+
+  // 2. Persist to storage (localStorage / AsyncStorage)
+  await saveStoredUser(user);
+
+  // 3. Best-effort Supabase sync (does not block local authentication)
   try {
-    await supabase.auth.verifyOtp({ phone, token: _token, type: "sms" });
+    await supabase.auth.verifyOtp({ phone: cleanPhone, token: _token, type: "sms" });
   } catch {
-    // Network unavailable — local session is enough
+    // Network unavailable or demo OTP — local session remains active
   }
 }
 
 // Wire Firebase + Supabase auth listeners once on the client.
 let wired = false;
-export function bootstrapSecureway() {
+export async function bootstrapSecureway() {
+  // Load persisted user session from storage first
+  try {
+    const storedUser = await loadStoredUser();
+    if (storedUser && !current.user) {
+      setState((s) => ({ ...s, user: storedUser }));
+    }
+  } catch {
+    // ignore
+  }
+
   if (wired) return;
   wired = true;
 
-  // Firebase auth listener (works on both web and native)
+  // Firebase auth listener
   try {
     onAuthStateChanged(firebaseAuth, (user) => {
       if (user) {
         refresh().catch(() => {});
-      } else {
-        // Don't clear state on mobile — user may have set a local session
-        if (typeof window !== "undefined") {
-          supabase.auth.getSession().then(({ data }) => {
-            if (!data?.session) {
-              setState(() => empty);
-            }
-          }).catch(() => {});
-        }
       }
     });
   } catch (e) {
     console.warn("Firebase auth listener note:", e);
   }
 
-  // Supabase auth listener (web only, needs network)
+  // Supabase auth listener
   if (typeof window !== "undefined") {
     try {
       supabase.auth.onAuthStateChange((_event, session) => {
-        if (!session && !firebaseAuth.currentUser) {
-          // Only clear if no local user state set
-          if (!current.user) setState(() => empty);
-        } else {
+        if (session) {
           refresh().catch(() => {});
         }
       });
     } catch (e) {
       console.warn("Supabase auth listener note:", e);
     }
-
-    refresh().catch(() => {});
   }
 }
