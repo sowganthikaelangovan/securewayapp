@@ -2,6 +2,8 @@ import React, { useMemo, useRef, useEffect } from "react";
 import { View, StyleSheet, ActivityIndicator, Text } from "react-native";
 import { WebView } from "react-native-webview";
 
+const WebViewComponent = WebView as any;
+
 export interface MapMarker {
   id: string;
   lat: number;
@@ -195,7 +197,7 @@ export function MapboxMapView({
 
   return (
     <View style={[styles.container, style]}>
-      <WebView
+      <WebViewComponent
         ref={webViewRef}
         originWhitelist={["*"]}
         source={{ html: htmlContent }}
@@ -230,7 +232,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#090d16",
   },
   loaderContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "#0d1322",
     alignItems: "center",
     justifyContent: "center",

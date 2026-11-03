@@ -32,7 +32,7 @@ export default function App() {
   if (!user) {
     return (
       <>
-        <StatusBar barStyle="light-content" backgroundColor="#090d16" />
+        <StatusBar barStyle="light-content" />
         <LoginScreen />
       </>
     );
@@ -40,7 +40,7 @@ export default function App() {
 
   return (
     <NavigationContainer>
-      <StatusBar barStyle="light-content" backgroundColor="#0d1322" />
+      <StatusBar barStyle="light-content" />
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
